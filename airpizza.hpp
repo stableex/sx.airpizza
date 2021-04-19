@@ -10,11 +10,9 @@ namespace airpizza {
     const name code = "air.pizza"_n;
     const std::string description = "Air.Pizza Converter";
 
-    const extended_symbol USDT { symbol{"USDT",4}, "tethertether"_n };
-
     struct market_config {
         uint32_t    leverage;
-        float_t     fee_rate;
+        asset       fee_rate;
     };
 
     struct [[eosio::table]] market_row {
@@ -49,22 +47,23 @@ namespace airpizza {
      * ## STATIC `get_amount_out`
      *
      * Given an input amount of an asset and pair id, returns the calculated return
-     * Based on Curve.fi formula (with a tweak): https://www.curve.fi/stableswap-paper.pdf
      *
      * ### params
      *
      * - `{asset} in` - input amount
      * - `{symbol} out_sym` - out symbol
+     * - `{symbol} lptoken` - pair id (liquidity token for that market)
      *
      * ### example
      *
      * ```c++
      * // Inputs
      * const asset in = asset { 10000, "USDT" };
-     * const symbol out_sym = symbol { "DAI,6" };
+     * const symbol out_sym = symbol { "USDE,4" };
+     * const symbol lptoken = symbol { "USDII,4" }
      *
      * // Calculation
-     * const asset out = ecurve::get_amount_out( in, out_sym );
+     * const asset out = airpizza::get_amount_out( in, out_sym, lptoken );
      * // => 0.999612
      * ```
      */
@@ -77,13 +76,11 @@ namespace airpizza {
         const auto pool = _market.get(lptoken.code().raw(), "airpizza: Can't find market");
         check(pool.reserves.size() == 2, "airpizza: Only 2-reserve pools supported");
 
-        const int128_t A = pool.config.leverage;
-        const double fee = 0.0005;//pool.config.fee_rate;
+        const int128_t A = pool.config.leverage * 2;                //x2 amplifier
+        const auto fee = pool.config.fee_rate.amount / 10000;       //strange way to hold a fee
         auto res_in = pool.reserves[0];
         auto res_out = pool.reserves[1];
         if(res_in.symbol != quantity.symbol) std::swap(res_in, res_out);
-        print("\nReserves: ", res_in, ", ", res_out);
-        print("\nA: ", A);
         check(res_in.symbol == quantity.symbol && res_out.symbol == out_sym, "airpizza: wrong pool");
         check(res_in.amount > 0 && res_out.amount > 0, "airpizza: Empty reserves");
         uint8_t precision = max(res_in.symbol.precision(), res_out.symbol.precision());
@@ -91,39 +88,28 @@ namespace airpizza {
         const auto reserve_in = normalize(res_in, precision);
         const auto reserve_out = normalize(res_out, precision);
         const auto amount_in = normalize(quantity, precision);
-        print("\nNormalized Reserves: ", reserve_in, ", ", reserve_out);
-        print("\nNormalized amount_in: ", amount_in);
 
         const uint64_t sum = reserve_in + reserve_out;
         uint128_t D = sum, D_prev = 0;
         int i = 10;
         while ( D != D_prev && i--) {
-            print("\nD: ", D);
             uint128_t prod1 = D * D / (reserve_in * 2) * D / (reserve_out * 2);
             D_prev = D;
             D = 2 * D * (A * sum + prod1) / ((2 * A - 1) * D + 3 * prod1);
         }
-        print("\nD final: ", D);
 
         const int128_t b = (int128_t) ((reserve_in + amount_in) + (D / (A * 2))) - (int128_t) D;
         const uint128_t c = D * D / ((reserve_in + amount_in) * 2) * D / (A * 4);
         uint128_t x = D, x_prev = 0;
         i = 10;
         while ( x != x_prev && i--) {
-            print("\nx: ", x);
             x_prev = x;
             x = (x * x + c) / (2 * x + b);
         }
-        print("\nx final: ", x);
         uint64_t amount_out = reserve_out - (int64_t)x;
 
-
-        print("\namount_out: ", amount_out, ", fee: ", fee);
-
-        amount_out -= fee * amount_out / 10000;
+        amount_out -= amount_out * fee / 10000;
         check(amount_out > 0, "airpizza: non-positive OUT");
-
-        //check(false, "hi");
 
         return denormalize( amount_out, precision, out_sym );
     }
