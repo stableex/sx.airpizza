@@ -10,6 +10,8 @@ namespace airpizza {
     const name code = "air.pizza"_n;
     const std::string description = "Air.Pizza Converter";
 
+    const symbol FEE_SYM = symbol{"F",8};
+
     struct market_config {
         uint32_t    leverage;
         asset       fee_rate;
@@ -28,6 +30,16 @@ namespace airpizza {
     };
     typedef eosio::multi_index< "market"_n, market_row > market;
 
+    struct [[eosio::table]] mleverage_row {
+        symbol          lptoken;
+        uint32_t        leverage;
+        uint32_t        begined_at;
+        uint32_t        effective_secs;
+
+        uint64_t primary_key() const { return lptoken.code().raw(); }
+    };
+    typedef eosio::multi_index< "mleverage"_n, mleverage_row > mleverage;
+
     static int64_t normalize( const asset in, const uint8_t precision)
     {
         check(precision >= in.symbol.precision(), "ecurve::normalize: invalid normalize precision");
@@ -43,6 +55,22 @@ namespace airpizza {
         return asset{ amount / static_cast<int64_t>(pow( 10, precision - sym.precision() )), sym };
     }
 
+    static uint32_t get_amplifier(uint32_t A0, const symbol lptoken) {
+
+        mleverage _mleverage(code, code.value);
+        auto it = _mleverage.find(lptoken.code().raw());
+        if(it == _mleverage.end()) return A0;
+
+        const uint32_t now = current_time_point().sec_since_epoch();
+        if(now >= it->begined_at + it->effective_secs) return it->leverage;
+        uint32_t A1 = it->leverage;
+        uint32_t t0 = it->begined_at;
+        uint32_t t1 = it->begined_at + it->effective_secs;
+
+        return ( A1 > A0 )
+            ? A0 + (A1 - A0) * (now - t0) / (t1 - t0)
+            : A0 - (A0 - A1) * (now - t0) / (t1 - t0);
+    }
     /**
      * ## STATIC `get_amount_out`
      *
@@ -75,8 +103,9 @@ namespace airpizza {
         market _market(code, code.value);
         const auto pool = _market.get(lptoken.code().raw(), "airpizza: Can't find market");
         check(pool.reserves.size() == 2, "airpizza: Only 2-reserve pools supported");
+        check(pool.config.fee_rate.symbol == FEE_SYM, "airpizza: Wrong fee symbol");
 
-        const int128_t A = pool.config.leverage * 2;                //x2 amplifier
+        int128_t A = get_amplifier(pool.config.leverage, lptoken);  //get moving amplifier if applicable
         const auto fee = pool.config.fee_rate.amount / 10000;       //strange way to hold a fee
         auto res_in = pool.reserves[0];
         auto res_out = pool.reserves[1];
@@ -85,21 +114,24 @@ namespace airpizza {
         check(res_in.amount > 0 && res_out.amount > 0, "airpizza: Empty reserves");
         uint8_t precision = max(res_in.symbol.precision(), res_out.symbol.precision());
 
+        //normalize reserves and in amount to max precision
         const auto reserve_in = normalize(res_in, precision);
         const auto reserve_out = normalize(res_out, precision);
         const auto amount_in = normalize(quantity, precision);
 
+        //find D based on existing reserves by solving StableSwap invariant equation iteratively
         const uint64_t sum = reserve_in + reserve_out;
         uint128_t D = sum, D_prev = 0;
         int i = 10;
         while ( D != D_prev && i--) {
             uint128_t prod1 = D * D / (reserve_in * 2) * D / (reserve_out * 2);
             D_prev = D;
-            D = 2 * D * (A * sum + prod1) / ((2 * A - 1) * D + 3 * prod1);
+            D = 2 * D * (2 * A * sum + prod1) / ((4 * A - 1) * D + 3 * prod1);
         }
 
-        const int128_t b = (int128_t) ((reserve_in + amount_in) + (D / (A * 2))) - (int128_t) D;
-        const uint128_t c = D * D / ((reserve_in + amount_in) * 2) * D / (A * 4);
+        //find x (reserve_out) based on new reserve_in and D by solving invariant equation iteratively
+        const int128_t b = (int128_t) ((reserve_in + amount_in) + (D / (A * 4))) - (int128_t) D;
+        const uint128_t c = D * D / ((reserve_in + amount_in) * 2) * D / (A * 8);
         uint128_t x = D, x_prev = 0;
         i = 10;
         while ( x != x_prev && i--) {
