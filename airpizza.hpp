@@ -42,16 +42,11 @@ namespace airpizza {
 
     static int64_t normalize( const asset in, const uint8_t precision)
     {
-        check(precision >= in.symbol.precision(), "ecurve::normalize: invalid normalize precision");
-        const int64_t res = in.amount * static_cast<int64_t>( pow(10, precision - in.symbol.precision() ));
-        check(res >= 0, "ecurve::normalize: overflow");
-
-        return res;
+        return in.amount * static_cast<int64_t>( pow(10, precision - in.symbol.precision() ));
     }
 
     static asset denormalize( const int64_t amount, const uint8_t precision, const symbol sym)
     {
-        check(precision >= sym.precision(), "ecurve::denormalize: invalid precision");
         return asset{ amount / static_cast<int64_t>(pow( 10, precision - sym.precision() )), sym };
     }
 
@@ -62,10 +57,10 @@ namespace airpizza {
         if(it == _mleverage.end()) return A0;
 
         const uint32_t now = current_time_point().sec_since_epoch();
-        if(now >= it->begined_at + it->effective_secs) return it->leverage;
         uint32_t A1 = it->leverage;
         uint32_t t0 = it->begined_at;
         uint32_t t1 = it->begined_at + it->effective_secs;
+        if(now >= t1) return A1;
 
         return ( A1 > A0 )
             ? A0 + (A1 - A0) * (now - t0) / (t1 - t0)
