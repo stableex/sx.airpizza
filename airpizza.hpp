@@ -50,10 +50,10 @@ namespace airpizza {
         return asset{ amount / static_cast<int64_t>(pow( 10, precision - sym.precision() )), sym };
     }
 
-    static uint32_t get_amplifier(uint32_t A0, const symbol lptoken) {
+    static uint32_t get_amplifier(uint32_t A0, const symbol_code lptoken) {
 
         mleverage _mleverage(code, code.value);
-        auto it = _mleverage.find(lptoken.code().raw());
+        auto it = _mleverage.find(lptoken.raw());
         if(it == _mleverage.end()) return A0;
 
         const uint32_t now = current_time_point().sec_since_epoch();
@@ -83,20 +83,20 @@ namespace airpizza {
      * // Inputs
      * const asset in = asset { 10000, "USDT" };
      * const symbol out_sym = symbol { "USDE,4" };
-     * const symbol lptoken = symbol { "USDII,4" }
+     * const symbol_code lptoken = symbol_code { "USDII" }
      *
      * // Calculation
      * const asset out = airpizza::get_amount_out( in, out_sym, lptoken );
      * // => 0.999612
      * ```
      */
-    static asset get_amount_out( const asset quantity, const symbol out_sym, const symbol lptoken )
+    static asset get_amount_out( const asset quantity, const symbol out_sym, const symbol_code lptoken )
     {
         check(quantity.amount > 0, "airpizza: INSUFFICIENT_INPUT_AMOUNT");
         check(lptoken.is_valid(), "airpizza: Invalid liquidity token");
 
         market _market(code, code.value);
-        const auto pool = _market.get(lptoken.code().raw(), "airpizza: Can't find market");
+        const auto pool = _market.get(lptoken.raw(), "airpizza: Can't find market");
         check(pool.reserves.size() == 2, "airpizza: Only 2-reserve pools supported");
         check(pool.config.fee_rate.symbol == FEE_SYM, "airpizza: Wrong fee symbol");
 
