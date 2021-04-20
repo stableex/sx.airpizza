@@ -40,6 +40,44 @@ namespace airpizza {
     };
     typedef eosio::multi_index< "mleverage"_n, mleverage_row > mleverage;
 
+    struct [[eosio::table]] pztoken_row {
+        name            pzname;
+        extended_symbol pzsymbol;
+        extended_symbol anchor;
+        asset           cumulative_deposit;
+        asset           available_deposit;
+        asset           pzquantity;
+        asset           borrow;
+        asset           cumulative_borrow;
+        asset           variable_borrow;
+        asset           stable_borrow;
+        asset           usage_rate;
+        asset           floating_rate;
+        asset           discount_rate;
+        asset           price;
+        double_t        pzprice;
+        // double_t        pzprice_rate;
+        // uint64_t        updated_at;
+        // asset           base_rate;
+        // asset           max_rate;
+        // asset           base_discount_rate;
+        // asset           max_discount_rate;
+        // asset           best_usage_rate;
+        // asset           floating_fee_rate;
+        // asset           fixed_fee_rate;
+        // asset           liqdt_rate;
+        // asset           liqdt_bonus;
+        // asset           max_ltv;
+        // asset           floating_rate_power;
+        // bool            is_collateral;
+        // bool            can_stable_borrow;
+        // uint8_t         borrow_liqdt_order;
+        // uint8_t         collateral_liqdt_order;
+
+        uint64_t primary_key() const { return pzname.value; }
+    };
+    typedef eosio::multi_index< "pztoken"_n, pztoken_row > pztoken;
+
     static int64_t normalize( const asset in, const uint8_t precision)
     {
         return in.amount * static_cast<int64_t>( pow(10, precision - in.symbol.precision() ));
@@ -65,6 +103,19 @@ namespace airpizza {
         return ( A1 > A0 )
             ? A0 + (A1 - A0) * (now - t0) / (t1 - t0)
             : A0 - (A0 - A1) * (now - t0) / (t1 - t0);
+    }
+
+    static asset convert_lendable(const asset pzqty){
+        name contract = "lend.pizza"_n;
+        pztoken pztoken_tbl(contract, contract.value);
+        for(const auto& row: pztoken_tbl) {
+            if(row.pzsymbol.get_symbol() == pzqty.symbol) {
+                return asset{ static_cast<int64_t>(row.pzprice * pzqty.amount), row.anchor.get_symbol() };
+            }
+        }
+        check(false, "airpizza: Can't find lendable asset");
+        return pzqty;
+
     }
     /**
      * ## STATIC `get_amount_out`
@@ -101,10 +152,11 @@ namespace airpizza {
         check(pool.config.fee_rate.symbol == FEE_SYM, "airpizza: Wrong fee symbol");
 
         int128_t A = get_amplifier(pool.config.leverage, lptoken);  //get moving amplifier if applicable
-        const auto fee = pool.config.fee_rate.amount / 10000;       //strange way to hold a fee
-        auto res_in = pool.reserves[0];
-        auto res_out = pool.reserves[1];
+        const auto fee = pool.config.fee_rate.amount / 10000;       //"pizza" way to hold a fee
+        auto res_in = pool.lendables[0] ? convert_lendable(pool.reserves[0]) : pool.reserves[0];
+        auto res_out = pool.lendables[1] ? convert_lendable(pool.reserves[1]) : pool.reserves[1];
         if(res_in.symbol != quantity.symbol) std::swap(res_in, res_out);
+
         check(res_in.symbol == quantity.symbol && res_out.symbol == out_sym, "airpizza: wrong pool");
         check(res_in.amount > 0 && res_out.amount > 0, "airpizza: Empty reserves");
         uint8_t precision = max(res_in.symbol.precision(), res_out.symbol.precision());
