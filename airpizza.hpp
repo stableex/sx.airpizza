@@ -158,7 +158,7 @@ namespace airpizza {
         if(res_in.symbol != quantity.symbol) std::swap(res_in, res_out);
 
         check(res_in.symbol == quantity.symbol && res_out.symbol == out_sym, "airpizza: wrong pool");
-        check(res_in.amount > 0 && res_out.amount > 0, "airpizza: Empty reserves");
+        if(res_in.amount == 0 || res_out.amount == 0) return asset { 0, out_sym };
         uint8_t precision = max(res_in.symbol.precision(), res_out.symbol.precision());
 
         //normalize reserves and in amount to max precision
