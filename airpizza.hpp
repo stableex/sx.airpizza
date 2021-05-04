@@ -104,8 +104,8 @@ namespace airpizza {
 
         int128_t A = get_amplifier(pool.config.leverage, lptoken);  //get moving amplifier if applicable
         const auto fee = pool.config.fee_rate.amount / 10000;       //"pizza" way to hold a fee
-        auto res_in = pool.lendables[0] ? pizzalend::unwrap(pool.reserves[0]).quantity : pool.reserves[0];
-        auto res_out = pool.lendables[1] ? pizzalend::unwrap(pool.reserves[1]).quantity : pool.reserves[1];
+        auto res_in = pool.lendables[0] ? pizzalend::unwrap(pool.reserves[0], true).quantity : pool.reserves[0];
+        auto res_out = pool.lendables[1] ? pizzalend::unwrap(pool.reserves[1], true).quantity : pool.reserves[1];
         if(res_in.symbol != quantity.symbol) std::swap(res_in, res_out);
 
         check(res_in.symbol == quantity.symbol && res_out.symbol == out_sym, "airpizza: wrong pool");
