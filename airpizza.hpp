@@ -102,7 +102,7 @@ namespace airpizza {
         check(pool.reserves.size() == 2, "airpizza: Only 2-reserve pools supported");
         check(pool.config.fee_rate.symbol == FEE_SYM, "airpizza: Wrong fee symbol");
 
-        int128_t A = get_amplifier(pool.config.leverage, lptoken);  //get moving amplifier if applicable
+        int128_t A = get_amplifier(pool.config.leverage, lptoken) / 10000;  //get moving amplifier if applicable
         const auto fee = pool.config.fee_rate.amount / 10000;       //"pizza" way to hold a fee
         auto res_in = pool.lendables[0] ? pizzalend::unwrap(pool.reserves[0], true).quantity : pool.reserves[0];
         auto res_out = pool.lendables[1] ? pizzalend::unwrap(pool.reserves[1], true).quantity : pool.reserves[1];
