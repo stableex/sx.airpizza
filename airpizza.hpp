@@ -57,15 +57,17 @@ namespace airpizza {
         auto it = _mleverage.find(lptoken.raw());
         if(it == _mleverage.end()) return A0;
 
-        const uint32_t now = current_time_point().sec_since_epoch();
-        uint32_t A1 = it->leverage;
-        uint32_t t0 = it->begined_at;
-        uint32_t t1 = it->begined_at + it->effective_secs;
+        const uint64_t now = current_time_point().sec_since_epoch();
+        uint64_t A1 = it->leverage;
+        uint64_t t0 = it->begined_at;
+        uint64_t t1 = it->begined_at + it->effective_secs;
         if(now >= t1) return A1;
 
-        return ( A1 > A0 )
+        const auto res = ( A1 > A0 )
             ? A0 + (A1 - A0) * (now - t0) / (t1 - t0)
             : A0 - (A0 - A1) * (now - t0) / (t1 - t0);
+
+        return static_cast<uint32_t> (res);
     }
 
     /**
