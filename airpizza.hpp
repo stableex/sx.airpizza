@@ -104,7 +104,7 @@ namespace airpizza {
         check(pool.reserves.size() == 2, "airpizza: Only 2-reserve pools supported");
         check(pool.config.fee_rate.symbol == FEE_SYM, "airpizza: Wrong fee symbol");
 
-        int128_t A = get_amplifier(pool.config.leverage, lptoken) / 10000;  //get moving amplifier if applicable
+        int128_t A = get_amplifier(pool.config.leverage, lptoken);  //get moving amplifier if applicable
         const auto fee = pool.config.fee_rate.amount / 10000;       //"pizza" way to hold a fee
         auto res_in = pool.lendables[0] ? pizzalend::unwrap(pool.reserves[0], true).quantity : pool.reserves[0];
         auto res_out = pool.lendables[1] ? pizzalend::unwrap(pool.reserves[1], true).quantity : pool.reserves[1];
@@ -126,12 +126,12 @@ namespace airpizza {
         while ( D != D_prev && i--) {
             uint128_t prod1 = D * D / (reserve_in * 2) * D / (reserve_out * 2);
             D_prev = D;
-            D = 2 * D * (2 * A * sum + prod1) / ((4 * A - 1) * D + 3 * prod1);
+            D = 2 * D * (2 * A * sum / 10000 + prod1) / (4 * A * D  / 10000 - D + 3 * prod1);
         }
 
         //find x (reserve_out) based on new reserve_in and D by solving invariant equation iteratively
-        const int128_t b = (int128_t) ((reserve_in + amount_in) + (D / (A * 4))) - (int128_t) D;
-        const uint128_t c = D * D / ((reserve_in + amount_in) * 2) * D / (A * 8);
+        const int128_t b = (int128_t) ((reserve_in + amount_in) + (10000 * D / (A * 4))) - (int128_t) D;
+        const uint128_t c = D * D / ((reserve_in + amount_in) * 2) * 10000 * D / (A * 8);
         uint128_t x = D, x_prev = 0;
         i = 10;
         while ( x != x_prev && i--) {
