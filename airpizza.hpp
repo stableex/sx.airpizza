@@ -143,6 +143,12 @@ namespace airpizza {
         amount_out -= amount_out * fee / 10000;
         check(amount_out > 0, "airpizza: non-positive OUT");
 
-        return denormalize( amount_out, precision, out_sym );
+        const auto out = denormalize( amount_out, precision, out_sym );
+        if(pool.lendables[0] || pool.lendables[1]){
+            const auto redeemable = pizzalend::get_available_deposit(out_sym);
+            if(redeemable < out) return {0, out_sym};
+        }
+
+        return out;
     }
 }
